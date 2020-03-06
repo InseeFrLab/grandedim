@@ -1,14 +1,6 @@
-### Generic Machine Learning Example
+### Generic Machine Learning Example, Lalonde dataset
 ### Source code: https://github.com/demirermert/MLInference/blob/master/Heterogeneity/EL1.R
-
-
-#--------------------------------------------------------------------------------------------------------------------
-# This program obtains empirical results for the paper "Generic Machine Learning Discovery 
-# and Classification Analysis of Heterogenous Treatment Effects in Randomized Experiments"
-# by V. CHERNOZHUKOV, M. DEMIRER, E. DUFLO, I. FERNANDEZ-VAL
-#--------------------------------------------------------------------------------------------------------------------
-
-# Authors: V. CHERNOZHUKOV, M. DEMIRER, E. DUFLO, I. FERNANDEZ-VAL
+# Original Authors: V. CHERNOZHUKOV, M. DEMIRER, E. DUFLO, I. FERNANDEZ-VAL
 
 # This program returns three outputs
 # 1) A plot for each outcome variable reporting ATE by groups
@@ -20,51 +12,41 @@
 rm(list=ls(all=TRUE))
 vec.pac= c("foreign", "quantreg", "gbm", "glmnet",
            "MASS", "rpart", "doParallel", "sandwich", "randomForest",
-           "nnet", "matrixStats", "xtable", "readstata13", "car", "lfe", "doParallel",
-           "caret", "foreach", "multcomp","cowplot")
+           "nnet", "matrixStats", "xtable", "lfe", "doParallel",
+           "caret", "foreach", "multcomp","cowplot","causalsens")
 
 lapply(vec.pac, require, character.only = TRUE) 
 
-ptm <- proc.time()
-
-set.seed(1211);
-cl   <- makeCluster(4, outfile="")
-registerDoParallel(cl)
-
-
 ####################################### Load and Process Data  #######################################
 
-data        <- read.dta13("data_rep.dta")
-data$paire  <- factor(data$paire)
-a           <- as.data.frame(model.matrix(~data$paire-1))
-colnames(a) <- (substring( names(a), 6, 12))
-data <- cbind(data, a)
-colnames(data)[which(colnames(data)=="paire")] <- "vil_pair"
+data(lalonde.exp)
+data <- lalonde.psid
+data["NoIncome74"] = as.numeric(lalonde.psid[,"re74"]==0)
+data["NoIncome75"] = as.numeric(lalonde.psid[,"re75"]==0)
 
 ####################################### Inputs  #######################################
 
-sim     <- 100     # number of repetitions
+sim     <- 10     # number of repetitions
 K       <- 2       # number of folds
 p       <- 5       # number of groups 
 thres   <- .2      # quantile for most/least affected group
 alpha   <- .05     # significance level
 
 #  dimension of these three vectors should match. If dimension is greater than 1 the program runs heterogeneity estimation separately for each outcome variable
-names <- c("Amount of Loans",  "Output", "Profit", "Consumption")    # vector of labels for outcome variables
-Y     <- c("loansamt_total", "output_total", "profit_total", "consumption")     # vector of outcome variables
-D     <- rep("treatment", length(Y))  # vector of treatment variables
+names <- c("Income in 1978")    # vector of labels for outcome variables
+Y     <- c("re78")     # vector of outcome variables
+D     <- rep("treat", length(Y))  # vector of treatment variables
 
 # specify cluster, fixed effect and partition
-cluster      <- "demi_paire"       # if no cluster       use    cluster      <- "0"
-fixed_effect <- "vil_pair"         # if no fixed_effect  use    fixed_effect <- "0"
-partition    <- "demi_paire"       # if no partition     use    partition    <- "0"
+cluster      <- "0"       # if no cluster       use    cluster      <- "0"
+fixed_effect <- "0"         # if no fixed_effect  use    fixed_effect <- "0"
+partition    <- "0"       # if no partition     use    partition    <- "0"
 
 # create a vector of control variables
-controls     <- c("members_resid_bl", "nadults_resid_bl", "head_age_bl", "act_livestock_bl", "act_business_bl", "borrowed_total_bl", "members_resid_d_bl", "nadults_resid_d_bl", "head_age_d_bl", "act_livestock_d_bl", "act_business_d_bl", "borrowed_total_d_bl", "ccm_resp_activ", "other_resp_activ", "ccm_resp_activ_d", "other_resp_activ_d")
-controls     <- c(controls, names(data)[(substring( names(data), 1, 5)=="paire")])
+controls     <- c("age","education","married","black","hispanic","re74","re75","nodegree","NoIncome74","NoIncome75")
 
-affected       <- c("head_age_bl", "members_resid_bl", "act_business_bl", "borrowed_total_bl")      # characteristics for most/least affected analysis
-names_affected <- c("head_age_bl", "members_resid_bl", "act_business_bl", "borrowed_total_bl")      # characteristics for most/least affected analysis
+affected       <- c("age","education","married","black","hispanic","re74","re75","nodegree","NoIncome74","NoIncome75")      # characteristics for most/least affected analysis
+names_affected <- c("age","education","married","black","hispanic","re74","re75","nodegree","NoIncome74","NoIncome75")     # characteristics for most/least affected analysis
 
 # generate formula for x, xl is for linear models
 X <- ""
@@ -139,6 +121,12 @@ output_name <- paste("range","-","best", "-", 2, "-" ,2, "-",sim,sep="")
 name        <- "EL1"
 
 ####################################### Estimation  #######################################
+
+ptm <- proc.time()
+
+set.seed(1211);
+cl   <- makeCluster(5, outfile="")
+registerDoParallel(cl)
 
 r <- foreach(t = 1:sim, .combine='cbind', .inorder=FALSE, .packages=vec.pac) %dopar% { 
   
