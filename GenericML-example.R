@@ -19,14 +19,16 @@ lapply(vec.pac, require, character.only = TRUE)
 
 ####################################### Load and Process Data  #######################################
 
-data(lalonde.exp)
+# add observational and exprimental data
+data(lalonde.psid); data(lalonde.exp)
 data <- lalonde.psid
-data["NoIncome74"] = as.numeric(lalonde.psid[,"re74"]==0)
-data["NoIncome75"] = as.numeric(lalonde.psid[,"re75"]==0)
+data <- rbind(data,lalonde.exp[lalonde.exp[,"treat"]==0,])
+data["NoIncome74"] = as.numeric(data[,"re74"]==0)
+data["NoIncome75"] = as.numeric(data[,"re75"]==0)
 
 ####################################### Inputs  #######################################
 
-sim     <- 10     # number of repetitions
+sim     <- 100     # number of repetitions
 K       <- 2       # number of folds
 p       <- 5       # number of groups 
 thres   <- .2      # quantile for most/least affected group
@@ -40,7 +42,7 @@ D     <- rep("treat", length(Y))  # vector of treatment variables
 # specify cluster, fixed effect and partition
 cluster      <- "0"       # if no cluster       use    cluster      <- "0"
 fixed_effect <- "0"         # if no fixed_effect  use    fixed_effect <- "0"
-partition    <- "0"       # if no partition     use    partition    <- "0"
+partition    <- "treat"       # if no partition     use    partition    <- "0"
 
 # create a vector of control variables
 controls     <- c("age","education","married","black","hispanic","re74","re75","nodegree","NoIncome74","NoIncome75")
@@ -164,6 +166,7 @@ r <- foreach(t = 1:sim, .combine='cbind', .inorder=FALSE, .packages=vec.pac) %do
     
     ind_u <- which(datause[,d]==1)         # treatment indicator
     
+    
     for(l in 1:length(methods)){
       
       if(methods[l]=="glmnet"){   x         <- XL     }
@@ -175,8 +178,12 @@ r <- foreach(t = 1:sim, .combine='cbind', .inorder=FALSE, .packages=vec.pac) %do
       
       ############ Estimate Scores using ML ############
       
-      md_x         <- rep((nrow(datause[datause[,d]==1,]) + nrow(dataout[dataout[,d]==1,]))/(nrow(datause) + nrow(dataout)), nrow(dataout))  
+      #md_x         <- rep((nrow(datause[datause[,d]==1,]) + nrow(dataout[dataout[,d]==1,]))/(nrow(datause) + nrow(dataout)), nrow(dataout))  
       
+      # New propensity score
+      logit_form <- as.formula(paste(d,"~",x,sep=""))
+      logit <- glm(formula = logit_form, data = datause, family = binomial(logit))
+      md_x <- predict(logit, newdata=dataout, type="response")
       
       fitControl   <- trainControl(method = methodML[l], number = cv[l], repeats = rep[l], allowParallel = FALSE, verboseIter=FALSE, search="random", selectionFunction=select[l])
       arg          <- c(list(form=form, data = datause[ind_u,],  method = methods[l],  tuneGrid = f, trControl = fitControl, preProcess=proces[l], tuneLength=tune[l]), args[[methods[l]]])
