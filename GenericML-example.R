@@ -13,7 +13,7 @@ rm(list=ls(all=TRUE))
 vec.pac= c("foreign", "quantreg", "gbm", "glmnet",
            "MASS", "rpart", "doParallel", "sandwich", "randomForest",
            "nnet", "matrixStats", "xtable", "lfe", "doParallel",
-           "caret", "foreach", "multcomp","cowplot","causalsens")
+           "caret", "foreach", "multcomp","cowplot","causalsens","xgboost")
 
 lapply(vec.pac, require, character.only = TRUE) 
 
@@ -28,7 +28,7 @@ data["NoIncome75"] = as.numeric(data[,"re75"]==0)
 
 ####################################### Inputs  #######################################
 
-sim     <- 100     # number of repetitions
+sim     <- 10     # number of repetitions
 K       <- 2       # number of folds
 p       <- 5       # number of groups 
 thres   <- .2      # quantile for most/least affected group
@@ -94,20 +94,28 @@ if(fixed_effect!="0" & cluster!="0"){
 
 # Model names. For a list of available model names in caret package see: http://topepo.github.io/caret/available-models.html
 # some available models given above
-methods      <- c("glmnet", "gbm", "pcaNNet", "rf")   
-method_names <- c("Elastic Net", "Boosting", "Nnet", "Random Forest")
+methods      <- c("glmnet", "gbm", "nnet", "rf","xgbTree")   
+method_names <- c("Elastic Net", "Gradient Boosting Machine", "Neural Network", "Random Forest","Extreme Gradient Boosting")
 
 
 # A list of arguments for models used in the estimation
-args         <- list(svmLinear2=list(type='eps-regression'), svmLinear=list(type='nu-svr'), svmPoly=list(type='nu-svr'), gbm=list(verbose=FALSE), rf=list(ntree=1000), gamboost=list(baselearner='btree'), avNNet=list(verbose = 0, linout = TRUE, trace = FALSE), pcaNNet=list(linout = TRUE, trace = FALSE, MaxNWts=100000, maxit=10000), nnet=list(linout = TRUE, trace = FALSE, MaxNWts=100000, maxit=10000))
+args         <- list(svmLinear2=list(type='eps-regression'),
+                     svmLinear=list(type='nu-svr'),
+                     svmPoly=list(type='nu-svr'),
+                     gbm=list(verbose=FALSE),
+                     rf=list(ntree=1000),
+                     gamboost=list(baselearner='btree'),
+                     avNNet=list(verbose = 0, linout = TRUE, trace = FALSE),
+                     pcaNNet=list(linout = TRUE, trace = FALSE, MaxNWts=100000, maxit=10000),
+                     nnet=list(linout = TRUE, trace = FALSE, MaxNWts=100000, maxit=10000))
 
 
-methodML   <- c("repeatedcv", "repeatedcv", "repeatedcv", "none")   # resampling method for chosing tuning parameters. available options: boot, boot632, cv, LOOCV, LGOCV, repeatedcv, oob, none
-tune       <- c(100, 20, 20, NA)                                    # number of elements per parameter in the grid. the grid size is tune^{number of tuning parameters}. 
-proces     <- c("range", "range","range", "range")                  # pre-processing method
-select     <- c("best", "best","best", NA)                          # optimality criteria for choosing tuning parameter in cross validation. available options: best, oneSE, tolerance 
-cv         <- c(2, 2,2, 2)                                          # the number of folds in cross-validation 
-rep        <- c(2, 2,2, NA)                                         # number of iteration in repeated cross-validations 
+methodML   <- c("repeatedcv", "repeatedcv", "repeatedcv", "none","repeatedcv")   # resampling method for chosing tuning parameters. available options: boot, boot632, cv, LOOCV, LGOCV, repeatedcv, oob, none
+tune       <- c(100, 20, 20, NA,20)                                    # number of elements per parameter in the grid. the grid size is tune^{number of tuning parameters}. 
+proces     <- c("range", "range","pca","range","range")                  # pre-processing method
+select     <- c("best", "best","best", NA,"best")                          # optimality criteria for choosing tuning parameter in cross validation. available options: best, oneSE, tolerance 
+cv         <- c(2, 2, 2, 2, 2)                                          # the number of folds in cross-validation 
+rep        <- c(2, 2, 2, NA, 2)                                         # number of iteration in repeated cross-validations 
 
 
 # If there is a parameter of the model that user doesn't want to choose with cross validation, it should be set using tune_param variable. Below mtry of random forest is set to 5 
@@ -118,6 +126,7 @@ tune_param[[1]]  <- 0
 tune_param[[2]]  <- 0
 tune_param[[3]]  <- 0
 tune_param[[4]]  <- data.frame(mtry=5)
+tune_param[[5]]  <- 0
 
 output_name <- paste("range","-","best", "-", 2, "-" ,2, "-",sim,sep="")
 name        <- "EL1"
@@ -178,12 +187,12 @@ r <- foreach(t = 1:sim, .combine='cbind', .inorder=FALSE, .packages=vec.pac) %do
       
       ############ Estimate Scores using ML ############
       
-      #md_x         <- rep((nrow(datause[datause[,d]==1,]) + nrow(dataout[dataout[,d]==1,]))/(nrow(datause) + nrow(dataout)), nrow(dataout))  
+      md_x         <- rep((nrow(datause[datause[,d]==1,]) + nrow(dataout[dataout[,d]==1,]))/(nrow(datause) + nrow(dataout)), nrow(dataout))  
       
       # New propensity score
-      logit_form <- as.formula(paste(d,"~",x,sep=""))
-      logit <- glm(formula = logit_form, data = datause, family = binomial(logit))
-      md_x <- predict(logit, newdata=dataout, type="response")
+      #logit_form   <- as.formula(paste(d,"~",x,sep=""))
+      #logit        <- glm(formula = logit_form, data = datause, family = binomial(logit))
+      #md_x         <- predict(logit, newdata=dataout, type="response")
       
       fitControl   <- trainControl(method = methodML[l], number = cv[l], repeats = rep[l], allowParallel = FALSE, verboseIter=FALSE, search="random", selectionFunction=select[l])
       arg          <- c(list(form=form, data = datause[ind_u,],  method = methods[l],  tuneGrid = f, trControl = fitControl, preProcess=proces[l], tuneLength=tune[l]), args[[methods[l]]])
@@ -506,26 +515,26 @@ for(i in 1:length(Y)){
     par(mfrow=c(2,2))
   }
   
-  y_range     <- 1*range(group_all[(15*(i-1)+6):(15*(i-1)+10),],group_all[(15*(i-1)+11):(15*(i-1)+15),])
-  y_range2    <- y_range
-  y_range2[1] <- y_range[1]- (y_range[2] -  y_range[1])*0.1
-  y_range2[2] <- y_range[2]+ (y_range[2] -  y_range[1])*0.1
+  y_range     = 1*range(group_all[(15*(i-1)+6):(15*(i-1)+10),],group_all[(15*(i-1)+11):(15*(i-1)+15),])
+  y_range2    = y_range
+  y_range2[1] = y_range[1]- (y_range[2] -  y_range[1])*0.1
+  y_range2[2] = y_range[2]+ (y_range[2] -  y_range[1])*0.1
   
   result=list(0)
   
   for(j in 1:length(methods)){
     
-    ATE <- data.frame( x = c(-Inf, Inf), y = results_all[(4*(i-1)+1),j] , cutoff = factor(50))
-    U   <- data.frame( x = c(-Inf, Inf), y = results_all[(4*(i-1)+3),j] , cutoff = factor(50))
-    L   <- data.frame( x = c(-Inf, Inf), y = results_all[(4*(i-1)+2),j] , cutoff = factor(50))
+    ATE = data.frame( x = c(-Inf, Inf), y = results_all[(4*(i-1)+1),j] , cutoff = factor(50))
+    U   = data.frame( x = c(-Inf, Inf), y = results_all[(4*(i-1)+3),j] , cutoff = factor(50))
+    L   = data.frame( x = c(-Inf, Inf), y = results_all[(4*(i-1)+2),j] , cutoff = factor(50))
     
-    df <- data.frame(x =1:5,
-                     F =group_all[(15*(i-1)+1):(15*(i-1)+5),j],
-                     L =group_all[(15*(i-1)+6):(15*(i-1)+10),j],
-                     U =group_all[(15*(i-1)+11):(15*(i-1)+15),j],
-                     group = factor(c(2, 2, 2, 2,2)))
+    df = data.frame(x =1:5,
+                    F =group_all[(15*(i-1)+1):(15*(i-1)+5),j],
+                    L =group_all[(15*(i-1)+6):(15*(i-1)+10),j],
+                    U =group_all[(15*(i-1)+11):(15*(i-1)+15),j],
+                    group = factor(c(2, 2, 2, 2,2)))
     
-    result[[j]] <- ggplot() +
+    result[[j]] = ggplot() +
       theme_gray(base_size = 14) +
       geom_point(data=df,aes(y = F, x = x, colour='90% CB(GATES)'), size = 3) +
       geom_errorbar(data=df, aes(ymax = U, ymin = L ,x=x, y=F, height = .2, width=0.7, colour="GATES"), show.legend = TRUE) +
@@ -543,8 +552,8 @@ for(i in 1:length(Y)){
     
   }
   print(Y[i])
-  p      <- plot_grid(result[[1]], result[[2]], result[[3]], result[[4]], ncol=2)
+  p      = plot_grid(result[[1]], result[[2]], result[[3]], result[[4]], ncol=2)
   ggsave(paste(name,"_plot","-",output_name,"-",Y[i],".pdf",sep=""), p)
-  p_best <- plot_grid(result[[best[1]]], result[[best[2]]], ncol=2)
+  p_best = plot_grid(result[[best[1]]], result[[best[2]]], ncol=2)
   ggsave(paste(name,"_plot_best","-",output_name,"-",Y[i],".pdf",sep=""), p_best, width = 10, height = 5)
 }
