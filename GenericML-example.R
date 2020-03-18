@@ -10,6 +10,7 @@
 # 5) MSE: A latex table of mean squared errors from tuning
 
 rm(list=ls(all=TRUE))
+setwd('//ulysse/users/JL.HOUR/1A_These/A. Research/GenericML_example')
 vec.pac= c("foreign", "quantreg", "gbm", "glmnet",
            "MASS", "rpart", "doParallel", "sandwich", "randomForest",
            "nnet", "matrixStats", "xtable", "lfe", "doParallel",
@@ -20,35 +21,45 @@ lapply(vec.pac, require, character.only = TRUE)
 ####################################### Load and Process Data  #######################################
 
 # add observational and exprimental data
-data(lalonde.psid); data(lalonde.exp)
-data <- lalonde.psid
-data <- rbind(data,lalonde.exp[lalonde.exp[,"treat"]==0,])
-data["NoIncome74"] = as.numeric(data[,"re74"]==0)
-data["NoIncome75"] = as.numeric(data[,"re75"]==0)
+#data(lalonde.psid); data(lalonde.exp)
+#data <- lalonde.psid
+#data <- rbind(data,lalonde.exp[lalonde.exp[,"treat"]==0,])
+#data["NoIncome74"] = as.numeric(data[,"re74"]==0)
+#data["NoIncome75"] = as.numeric(data[,"re75"]==0)
+
+# Political Economy Paper
+data <- read.dta('W:/Telechargements/AJPS_ ReplicationDataset.dta')
+data[,"alltreat"] <- ifelse(data[,"treatment"]==4,0,1)
+data[,"dem_hh"] <- ifelse(data[,"totalvotedem_hh"]>data[,"totalvoterep_hh"],1,0)
+data[,"rep_hh"] <- ifelse(data[,"totalvotedem_hh"]<data[,"totalvoterep_hh"],1,0)
+data[,"old"] <- as.numeric(data[,"old"]=='Old')
+data[,"owner"] <- as.numeric(data[,"owner"]=='Owner Occupiers')
 
 ####################################### Inputs  #######################################
 
-sim     <- 10     # number of repetitions
+sim     <- 30     # number of repetitions
 K       <- 2       # number of folds
 p       <- 5       # number of groups 
 thres   <- .2      # quantile for most/least affected group
 alpha   <- .05     # significance level
 
 #  dimension of these three vectors should match. If dimension is greater than 1 the program runs heterogeneity estimation separately for each outcome variable
-names <- c("Income in 1978")    # vector of labels for outcome variables
-Y     <- c("re78")     # vector of outcome variables
-D     <- rep("treat", length(Y))  # vector of treatment variables
+names <- c("Water Consumption Sept. 07")    # vector of labels for outcome variables
+Y     <- c("summer_07")     # vector of outcome variables
+D     <- rep("alltreat", length(Y))  # vector of treatment variables
 
 # specify cluster, fixed effect and partition
 cluster      <- "0"       # if no cluster       use    cluster      <- "0"
-fixed_effect <- "0"         # if no fixed_effect  use    fixed_effect <- "0"
-partition    <- "treat"       # if no partition     use    partition    <- "0"
+fixed_effect <- "route"         # if no fixed_effect  use    fixed_effect <- "0"
+partition    <- "alltreat"       # if no partition     use    partition    <- "0"
 
 # create a vector of control variables
-controls     <- c("age","education","married","black","hispanic","re74","re75","nodegree","NoIncome74","NoIncome75")
+controls       <- c('unregistered','water_2006', 'apr_may_07', 'fmv', 'y_max_yblt', 'owner', 'old','perc_votecount_hh','dem_hh','rep_hh')
 
-affected       <- c("age","education","married","black","hispanic","re74","re75","nodegree","NoIncome74","NoIncome75")      # characteristics for most/least affected analysis
-names_affected <- c("age","education","married","black","hispanic","re74","re75","nodegree","NoIncome74","NoIncome75")     # characteristics for most/least affected analysis
+affected       <- controls      # characteristics for most/least affected analysis
+names_affected <- c('Non inscrit','Conso Eau 2006', 'Conso Eau T2 2007', 'Valeur de la Résidence',
+                    'Age de la résidence', 'Propriétaire', 'Personne âgée',
+                    'Frequence vote','Démocrate','Républicain')     # characteristics for most/least affected analysis
 
 # generate formula for x, xl is for linear models
 X <- ""
@@ -94,7 +105,7 @@ if(fixed_effect!="0" & cluster!="0"){
 
 # Model names. For a list of available model names in caret package see: http://topepo.github.io/caret/available-models.html
 # some available models given above
-methods      <- c("glmnet", "gbm", "nnet", "rf","xgbTree")   
+methods      <- c("glmnet", "gbm", "pcaNNet", "rf")   
 method_names <- c("Elastic Net", "Gradient Boosting Machine", "Neural Network", "Random Forest","Extreme Gradient Boosting")
 
 
@@ -110,12 +121,12 @@ args         <- list(svmLinear2=list(type='eps-regression'),
                      nnet=list(linout = TRUE, trace = FALSE, MaxNWts=100000, maxit=10000))
 
 
-methodML   <- c("repeatedcv", "repeatedcv", "repeatedcv", "none","repeatedcv")   # resampling method for chosing tuning parameters. available options: boot, boot632, cv, LOOCV, LGOCV, repeatedcv, oob, none
-tune       <- c(100, 20, 20, NA,20)                                    # number of elements per parameter in the grid. the grid size is tune^{number of tuning parameters}. 
-proces     <- c("range", "range","pca","range","range")                  # pre-processing method
-select     <- c("best", "best","best", NA,"best")                          # optimality criteria for choosing tuning parameter in cross validation. available options: best, oneSE, tolerance 
-cv         <- c(2, 2, 2, 2, 2)                                          # the number of folds in cross-validation 
-rep        <- c(2, 2, 2, NA, 2)                                         # number of iteration in repeated cross-validations 
+methodML   <- c("repeatedcv", "repeatedcv", "repeatedcv", "none")   # resampling method for chosing tuning parameters. available options: boot, boot632, cv, LOOCV, LGOCV, repeatedcv, oob, none
+tune       <- c(100, 20, 20, NA)                                    # number of elements per parameter in the grid. the grid size is tune^{number of tuning parameters}. 
+proces     <- c("range", "range","range","range")                  # pre-processing method
+select     <- c("best", "best","best", NA)                          # optimality criteria for choosing tuning parameter in cross validation. available options: best, oneSE, tolerance 
+cv         <- c(2, 2, 2, 2)                                          # the number of folds in cross-validation 
+rep        <- c(2, 2, 2, NA)                                         # number of iteration in repeated cross-validations 
 
 
 # If there is a parameter of the model that user doesn't want to choose with cross validation, it should be set using tune_param variable. Below mtry of random forest is set to 5 
@@ -126,7 +137,6 @@ tune_param[[1]]  <- 0
 tune_param[[2]]  <- 0
 tune_param[[3]]  <- 0
 tune_param[[4]]  <- data.frame(mtry=5)
-tune_param[[5]]  <- 0
 
 output_name <- paste("range","-","best", "-", 2, "-" ,2, "-",sim,sep="")
 name        <- "EL1"
@@ -136,7 +146,7 @@ name        <- "EL1"
 ptm <- proc.time()
 
 set.seed(1211);
-cl   <- makeCluster(5, outfile="")
+cl   <- makeCluster(30, outfile="")
 registerDoParallel(cl)
 
 r <- foreach(t = 1:sim, .combine='cbind', .inorder=FALSE, .packages=vec.pac) %dopar% { 
@@ -170,8 +180,8 @@ r <- foreach(t = 1:sim, .combine='cbind', .inorder=FALSE, .packages=vec.pac) %do
     y      <- Y[i]
     d      <- D[i]
     
-    datause   <- data.frame(datause_raw[complete.cases(datause_raw[, c(controls, y, d, affected)]),])
-    dataout   <- data.frame(dataout_raw[complete.cases(dataout_raw[, c(controls, y, d, affected)]),])
+    datause   <- data.frame(datause_raw[complete.cases(datause_raw[, c(controls, y, d)]),])
+    dataout   <- data.frame(dataout_raw[complete.cases(dataout_raw[, c(controls, y, d)]),])
     
     ind_u <- which(datause[,d]==1)         # treatment indicator
     
@@ -261,16 +271,16 @@ r <- foreach(t = 1:sim, .combine='cbind', .inorder=FALSE, .packages=vec.pac) %do
       pval <- summary(test)$test$pvalues[1]
       results_test[(11+(i-1)*15):(15+((i-1)*15)),l] <- c((confint(test,level = 1-alpha))$confint[1:3],(as.numeric(coef<0)*(pval/2) + as.numeric(coef>0)*(1-pval/2)),(as.numeric(coef<0)*(1-pval/2) + as.numeric(coef>0)*(pval/2)))
       
-      mean <- summary(reg)$coef[c('G1','G2','G3','G4','G5'),1]
-      sd   <- summary(reg)$coef[c('G1','G2','G3','G4','G5'),2]
+      gates_mean <- summary(reg)$coef[c('G1','G2','G3','G4','G5'),1]
+      gates_sd   <- summary(reg)$coef[c('G1','G2','G3','G4','G5'),2]
       
       crit <- qnorm(1-alpha/(p))
       
-      results_group[((i-1)*15+1):((i-1)*15+5),l]   <- sort(mean)
-      results_group[((i-1)*15+6):((i-1)*15+10),l]  <- sort(mean +crit*sd)
-      results_group[((i-1)*15+11):((i-1)*15+15),l] <- sort(mean -crit*sd)
+      results_group[((i-1)*15+1):((i-1)*15+5),l]   <- sort(gates_mean)
+      results_group[((i-1)*15+6):((i-1)*15+10),l]  <- sort(gates_mean +crit*gates_sd)
+      results_group[((i-1)*15+11):((i-1)*15+15),l] <- sort(gates_mean -crit*gates_sd)
       
-      bestML[(1+(i-1)*2),l]  <- (sum(mean^2)/5)
+      bestML[(1+(i-1)*2),l]  <- (sum(gates_mean^2)/5)
       
       ################################### Best Linear Prediction Regression  ################################### 
       
@@ -352,6 +362,8 @@ r <- foreach(t = 1:sim, .combine='cbind', .inorder=FALSE, .packages=vec.pac) %do
   print(t)
   r <- data.frame(res)
 }
+
+stopCluster(cl)
 
 ####################################### Prepare Latex Tables for BLP and Most/Least Affected  #######################################
 
@@ -529,15 +541,15 @@ for(i in 1:length(Y)){
     L   = data.frame( x = c(-Inf, Inf), y = results_all[(4*(i-1)+2),j] , cutoff = factor(50))
     
     df = data.frame(x =1:5,
-                    F =group_all[(15*(i-1)+1):(15*(i-1)+5),j],
-                    L =group_all[(15*(i-1)+6):(15*(i-1)+10),j],
-                    U =group_all[(15*(i-1)+11):(15*(i-1)+15),j],
+                    Est =group_all[(15*(i-1)+1):(15*(i-1)+5),j],
+                    Low =group_all[(15*(i-1)+6):(15*(i-1)+10),j],
+                    Upp =group_all[(15*(i-1)+11):(15*(i-1)+15),j],
                     group = factor(c(2, 2, 2, 2,2)))
     
     result[[j]] = ggplot() +
       theme_gray(base_size = 14) +
-      geom_point(data=df,aes(y = F, x = x, colour='90% CB(GATES)'), size = 3) +
-      geom_errorbar(data=df, aes(ymax = U, ymin = L ,x=x, y=F, height = .2, width=0.7, colour="GATES"), show.legend = TRUE) +
+      geom_point(data=df,aes(y = Est, x = x, colour='90% CB(GATES)'), size = 3) +
+      geom_errorbar(data=df, aes(ymax = Upp, ymin = Low ,x=x, y=Est, height = .2, width=0.7, colour="GATES"), show.legend = TRUE) +
       geom_line(aes( x, y, linetype = cutoff, colour='ATE' ),ATE, linetype = 2) +
       geom_line(aes( x, y, linetype = cutoff, colour='90% CB(ATE)' ), U, linetype = 2) +
       geom_line(aes( x, y, linetype = cutoff ), L, linetype = 2, color="red") +
