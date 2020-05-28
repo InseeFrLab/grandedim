@@ -8,7 +8,7 @@
 #' @param g1 estimate of E(Y_1 \vert X)
 #' @param g0 estimate of E(Y_0 \vert X)
 #' @param m propensity score estimate P(D=1 \vert X)
-#' @param selec indicator of common support
+#' @param CS indicator of common support
 #' 
 #' All vectors above must have the same length.
 #' 

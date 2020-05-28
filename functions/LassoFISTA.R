@@ -20,13 +20,13 @@
 #' @return nbIter Number of iterations necessary for convergence.
 #' @return convergence 1 if convergence, 0 if not.
 #' 
-#' @author Jeremy LHour
+#' @author Jeremy L'Hour
 
 
 LassoFISTA <- function(y,X,nopen=NULL,lambda,
                        tol=1e-8,maxIter=1000,trace=F){
   
-  ### Set Algo. Values
+  ### set algo values
   eta = 1/max(2*eigen(t(X)%*%X)$values/nrow(X))
   theta = 1
   thetaO = theta
@@ -43,19 +43,19 @@ LassoFISTA <- function(y,X,nopen=NULL,lambda,
     delta = (1-thetaO)/theta
     
     betaO = beta
-    beta = prox(v - eta*LeastSqgrad(v,y,X), lambda*eta,nopen)
+    beta = prox(v - eta*ls_gradient(v,y,X), lambda*eta,nopen)
     
     v = (1-delta)*beta + delta*betaO
     
     # Show objective function value
-    if(trace==T & k%%100 == 0){ print(paste("Objective Func. Value at iteration",k,":",LassoObj(beta,y,X,lambda,nopen))) }
+    if(trace==T & k%%100 == 0){ print(paste("Objective Func. Value at iteration",k,":",lasso_obj(beta,y,X,lambda,nopen))) }
     
     # Break if diverges
-    if(is.na(LassoObj(beta,y,X,lambda,nopen) - LassoObj(betaO,y,X,lambda,nopen))){
+    if(is.na(lasso_obj(beta,y,X,lambda,nopen) - lasso_obj(betaO,y,X,lambda,nopen))){
       cv = 0
       print("LassoFISTA did not converge")
       break
-    } else if(sum(abs(LassoObj(beta,y,X,lambda,nopen)-LassoObj(betaO,y,X,lambda,nopen))) < tol || k > maxIter) break
+    } else if(sum(abs(lasso_obj(beta,y,X,lambda,nopen)-lasso_obj(betaO,y,X,lambda,nopen))) < tol || k > maxIter) break
     
   }
   
@@ -65,8 +65,8 @@ LassoFISTA <- function(y,X,nopen=NULL,lambda,
   } 
   
   return(list(beta        = as.vector(beta),
-              value       = LassoObj(beta,y,X,lambda,nopen),
-              loss        = LeastSq(beta,y,X),
+              value       = lasso_obj(beta,y,X,lambda,nopen),
+              loss        = least_squares(beta,y,X),
               l1norm      = sum(abs(beta)),
               nbIter      = k,
               convergence = cv))
@@ -85,22 +85,22 @@ prox <- function(x,lambda,nopen){
   return(y)
 }
 
-LeastSq <- function(mu,y,X){
+least_squares <- function(mu,y,X){
   X = as.matrix(X)
   return(mean((y - X%*%mu)^2))
 }
 
-LeastSqgrad <- function(mu,y,X){
+ls_gradient <- function(mu,y,X){
   X = as.matrix(X)
   df = as.vector(-2*(t(y - X%*%mu)%*%X) / nrow(X))
   return(df)
 }
 
-LassoObj <- function(beta,y,X,lambda,nopen){
+lasso_obj <- function(beta,y,X,lambda,nopen){
   if(length(nopen)>0){
-    f = LeastSq(beta,y,X) + lambda*sum(abs(beta[-nopen]))
+    f = least_squares(beta,y,X) + lambda*sum(abs(beta[-nopen]))
   } else {
-    f = LeastSq(beta,y,X) + lambda*sum(abs(beta))
+    f = least_squares(beta,y,X) + lambda*sum(abs(beta))
   }
   return(f)
 }

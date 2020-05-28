@@ -15,26 +15,25 @@
 #' 
 #' @return Returns y,d and X necessary data to run Monte Carlo simulations. Also returns paramaters value for a possible check.
 #' 
-#' @author Jeremy Lhour
+#' @author Jeremy L'Hour
 
 DataSim <- function(n=2000,p=50,Ry=.5,Rd=.2,Intercept=T,rho=.5,a=.5){
-  
+
   ### Covariate variance matrix
   Sigma = matrix(0,nrow=p, ncol=p)
-  
   for(k in 1:p){
     for(j in 1:p){
       Sigma[k,j] = rho^abs(k-j)
     }
   }
   
-  ### Treatment variable coefficient
+  ### Outcome equation coefficient
   b = rep(0,p)
   for(j in 1:abs(p/2)){
     b[j] = 1*(-1)^(j) / j^2
   }
   
-  ### Outcome equation coefficients
+  ### Treatment equation coefficient
   gamma = b
   for(j in (abs(p/2)+1):p){
     gamma[j] = (-1)^(j+1) / (p-j+1)^2
@@ -59,9 +58,9 @@ DataSim <- function(n=2000,p=50,Ry=.5,Rd=.2,Intercept=T,rho=.5,a=.5){
   
   if(Intercept) X = cbind(rep(1,n),X)
   
-  return(list(X=X,
-              y=y,
-              d=d,
-              b=b,
-              g=gamma))
+  return(list(X = X,
+              y = y,
+              d = d,
+              b = b,
+              g = gamma))
 }
