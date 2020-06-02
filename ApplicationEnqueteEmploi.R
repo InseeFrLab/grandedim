@@ -2,6 +2,9 @@
 ### Jérémy L'Hour
 ### 29/05/2020
 
+### Attention: le group lasso nécessite énormément de mémoire, surtout pour constituer la matrice de design
+### Ensuite, cela prend un certain temps pour obtenir les resultats
+
 
 rm(list=ls())
 
@@ -39,8 +42,9 @@ data[,"AG"] = as.numeric(data[,"AG"]) # Age
 data[,"AG_2"] = data[,"AG"]^2 # Age au carré
 data[,"ANCENTR"] = as.numeric(data[,"ANCENTR"]) # Ancienneté dans l'entreprise
 data[,"HHC"] = as.numeric(data[,"HHC"]) # Nombre d'heures travaillées en moyenne
+data[,"NBENFIND"] = as.numeric(data[,"NBENFIND"]) # Nombre d'enfants de l'individu
 
-names_continuous = c("AG", "AG_2", "ANCENTR","HHC")
+names_continuous = c("AG", "AG_2", "ANCENTR","HHC","NBENFIND")
 
 # 2. Variables categorielles
 data[,"SEXE"] = as.factor(data[,"SEXE"]) # Sexe
@@ -59,13 +63,24 @@ data[,"DESC"] = as.factor(data[,"DESC"]) # descendance d'immigrés
 data[,"IMMI"] = as.factor(data[,"IMMI"]) # immigre
 data[,"DUHAB"] = as.factor(data[,"DUHAB"]) # type d'horaires de travail
 data[,"ENFRED"] = as.factor(data[,"ENFRED"]) # au moins un enfant dans le menage
-data[,"HATFIELDF"] = as.factor(data[,"HATFIELDF"]) # champs des études suivies (e.g. science, lettre education)
+data[,"SPE"] = as.factor(data[,"SPE"]) # champs des études suivies (e.g. science, lettre education)
 data[,"MAISOC"] = as.factor(data[,"MAISOC"]) # teletravail
 data[,"MATRI"] = as.factor(data[,"MATRI"]) # statut matrimonial
+data[,"NAT14"] = as.factor(data[,"NAT14"]) # nationalité
+data[,"NBAGEENFA"] = as.factor(data[,"NBAGEENFA"]) # nombre et age des enfants
+data[,"NBENFA1"] = as.factor(data[,"NBENFA1"]) # nombre d'enfants de moins de 1 an
+data[,"NBENFA10"] = as.factor(data[,"NBENFA10"]) # nombre d'enfants de moins de 10 ans
+data[,"NBENFA15"] = as.factor(data[,"NBENFA15"]) # nombre d'enfants de moins de 15 ans
+data[,"NBENFA18"] = as.factor(data[,"NBENFA18"]) # nombre d'enfants de moins de 18 ans
+data[,"QP"] = as.factor(data[,"QP"]) # appartient à un quartier prioritaire
+data[,"REG"] = as.factor(data[,"REG"]) # region du logement de résidence
+data[,"SO"] = as.factor(data[,"SO"]) # statut d'occupation du logement
+data[,"SOIRC"] = as.factor(data[,"SOIRC"]) # travaille le soir
+data[,"TYPMEN21"] = as.factor(data[,"TYPMEN21"]) # type de ménage
 
 names_categorical = c("SEXE","APPDIP","SANTGEN","ADMHAND","CATAU2010", "CHPUB","CHRON",
-                      "COMSAL","COURED","CSPM","CSPP","FORDAT","DESC","IMMI","DUHAB","ENFRED","HATFIELDF",
-                      "MAISOC","MATRI")
+                      "COMSAL","COURED","CSPM","CSPP","FORDAT","DESC","IMMI","DUHAB","ENFRED","SPE",
+                      "MAISOC","MATRI","NAT14","NBAGEENFA","NBENFA1","NBENFA10","NBENFA15","NBENFA18","QP","REG","SO","SOIRC","TYPMEN21")
 
 # 3. Autres
 data[,"AM2NB"] = as.factor(data[,"AM2NB"]) # Nombre d'activité professionnelles  // Trop de valeurs manquantes
@@ -93,6 +108,9 @@ X_2 = as.matrix(cbind(data_use[, names_continuous], one_hot_category))
 
 remove(data)
 remove(data_use)
+remove(one_hot_category)
+
+reg_simple = lm(Y ~ X_1)
 
 ############################################
 ############################################
@@ -110,8 +128,6 @@ outcome_selec = glmnet(X_2,Y, family="gaussian",alpha=1,lambda=lambda)
 predict(outcome_selec,type="coef")
 
 set_Y = predict(outcome_selec,type="nonzero") # ensemble des coefficients non nuls à cette étape
-
-summary(lm(Y ~ X_1 + X_2[,unlist(set_Y)]))
 
 ##################################################################
 ##################################################################
@@ -147,6 +163,7 @@ dbs_reg = lm(Y ~ X_1 + X_2[,S_hat])
 
 coef_names = paste("X_1",colnames(X_1),sep="")
 tau_hat = dbs_reg$coefficients[coef_names]
+tau_simple = reg_simple$coefficients[coef_names]
 
 ### Calcul de l'écart-type
 Gamma_hat = solve(t(X_2[,S_hat])%*%X_2[,S_hat]) %*% (t(X_2[,S_hat]) %*% X_1) # Regression post-lasso de chaque modalités de X_1
@@ -180,7 +197,8 @@ dip = data.frame("ID" = c("10","12","22","21","30","31","32","33","41","42","43"
               "Certificat d'études primaires"),
             "lower_bound" = tau_hat + qnorm(0.025)*diag(sigma),
             "Coefficient" = tau_hat,
-            "upper_bound" = tau_hat + qnorm(0.975) *diag(sigma))
+            "upper_bound" = tau_hat + qnorm(0.975) *diag(sigma),
+            "Moyenne" = tau_simple)
 
 qplot(x    = Diplome,
       y    = Coefficient,
@@ -190,4 +208,5 @@ qplot(x    = Diplome,
     ymax  = upper_bound,
     width = 0.15)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  scale_x_discrete(limits=rev(dip$Diplome))
+  scale_x_discrete(limits=rev(dip$Diplome)) +
+  geom_point(aes(Diplome,Moyenne), color="red",fill="red",shape=25)
