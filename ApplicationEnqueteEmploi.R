@@ -2,10 +2,15 @@
 ### Jérémy L'Hour
 ### 29/05/2020
 
+
+rm(list=ls())
+
 ### CHARGEMENT DES PACKAGES
 library('haven')
 library('glmnet')
 library('grplasso')
+library("ggplot2")
+library('fastDummies') # pour créer des dummies à partir de catégories
 
 
 #######################
@@ -17,6 +22,7 @@ library('grplasso')
 data = read_sas("indiv171.sas7bdat")
 data = as.data.frame(data)
 
+# Outcome "Y", log du salaire mensuel net
 data[,"SALRED"] = as.numeric(data[,"SALRED"]) # salaire mensuel net
 data[,"LOG_SAL"] = log(data[,"SALRED"]) # log salaire
 
@@ -28,20 +34,65 @@ data[,"DIP"] = as.factor(data[,"DIP"]) # niveau de diplome le plus eleve
 data[,"EXTRIDF"] = as.numeric(data[,"EXTRIDF"]) # poids de sondages
 
 # Autres variables "X_2"
+# 1. Continues
+data[,"AG"] = as.numeric(data[,"AG"]) # Age
+data[,"AG_2"] = data[,"AG"]^2 # Age au carré
+data[,"ANCENTR"] = as.numeric(data[,"ANCENTR"]) # Ancienneté dans l'entreprise
+data[,"HHC"] = as.numeric(data[,"HHC"]) # Nombre d'heures travaillées en moyenne
+
+names_continuous = c("AG", "AG_2", "ANCENTR","HHC")
+
+# 2. Variables categorielles
+data[,"SEXE"] = as.factor(data[,"SEXE"]) # Sexe
+data[,"APPDIP"] = as.factor(data[,"APPDIP"]) # diplôme obtenu en apprentissage
 data[,"SANTGEN"] = as.factor(data[,"SANTGEN"]) # niveau de santé perçu
-data[,"AG"] = as.numeric(data[,"AG"])
+data[,"ADMHAND"] = as.factor(data[,"ADMHAND"]) # reconnaissance d'un handicap
+data[,"CATAU2010"] = as.factor(data[,"CATAU2010"]) # categorie de la commune du logement de residence
+data[,"CHPUB"] = as.factor(data[,"CHPUB"]) # nature de l'employeur dans profession principale
+data[,"CHRON"] = as.factor(data[,"CHRON"]) # maladie chronique
+data[,"COMSAL"] = as.factor(data[,"COMSAL"]) # mode d'entrée dans l'emploi actuel
+data[,"COURED"] = as.factor(data[,"COURED"]) # en couple
+data[,"CSPM"] = as.factor(data[,"CSPM"]) # CSP Mere
+data[,"CSPP"] = as.factor(data[,"CSPP"]) # CSP Pere
+data[,"FORDAT"] = as.factor(data[,"FORDAT"]) # annee de fin d'études initiales
+data[,"DESC"] = as.factor(data[,"DESC"]) # descendance d'immigrés
+data[,"IMMI"] = as.factor(data[,"IMMI"]) # immigre
+data[,"DUHAB"] = as.factor(data[,"DUHAB"]) # type d'horaires de travail
+data[,"ENFRED"] = as.factor(data[,"ENFRED"]) # au moins un enfant dans le menage
+data[,"HATFIELDF"] = as.factor(data[,"HATFIELDF"]) # champs des études suivies (e.g. science, lettre education)
+data[,"MAISOC"] = as.factor(data[,"MAISOC"]) # teletravail
+data[,"MATRI"] = as.factor(data[,"MATRI"]) # statut matrimonial
+
+names_categorical = c("SEXE","APPDIP","SANTGEN","ADMHAND","CATAU2010", "CHPUB","CHRON",
+                      "COMSAL","COURED","CSPM","CSPP","FORDAT","DESC","IMMI","DUHAB","ENFRED","HATFIELDF",
+                      "MAISOC","MATRI")
+
+# 3. Autres
+data[,"AM2NB"] = as.factor(data[,"AM2NB"]) # Nombre d'activité professionnelles  // Trop de valeurs manquantes
+data[,"ACESSE"] = as.factor(data[,"ACESSE"]) # Circonstance fin de l'emploi anterieur // A mettre?
 
 
 ### Mise en place des bonnes matrices
 outcome = "LOG_SAL"
 X_1_names = "DIP"
-X_2_names = c("SANTGEN","AG")
+X_2_names = c(names_continuous,names_categorical)
 
 data_use = data[complete.cases(data[,c(outcome,X_1_names,X_2_names)]),]
 
 Y = data_use[,outcome]
-X_2 = makeX(data_use[,X_2_names])
 X_1 = makeX(data.frame("EDUC"=data_use[,X_1_names]))
+X_1 = X_1[,1:(ncol(X_1)-1)] # On enlève la modalité "sans diplôme" pour éviter les problèmes de colinéarité.
+
+# se poser la question de la gestion des NA pour les autres variables (X_2)
+#pre_X_2 = data_use[,X_2_names]
+#pre_X_2[pre_X_2 == ""] = NA
+#md.pattern(pre_X_2)
+
+one_hot_category = dummy_cols(data_use[,names_categorical], remove_most_frequent_dummy=TRUE, remove_selected_columns=TRUE)
+X_2 = as.matrix(cbind(data_use[, names_continuous], one_hot_category))
+
+remove(data)
+remove(data_use)
 
 ############################################
 ############################################
@@ -59,6 +110,8 @@ outcome_selec = glmnet(X_2,Y, family="gaussian",alpha=1,lambda=lambda)
 predict(outcome_selec,type="coef")
 
 set_Y = predict(outcome_selec,type="nonzero") # ensemble des coefficients non nuls à cette étape
+
+summary(lm(Y ~ X_1 + X_2[,unlist(set_Y)]))
 
 ##################################################################
 ##################################################################
@@ -99,22 +152,18 @@ tau_hat = dbs_reg$coefficients[coef_names]
 Gamma_hat = solve(t(X_2[,S_hat])%*%X_2[,S_hat]) %*% (t(X_2[,S_hat]) %*% X_1) # Regression post-lasso de chaque modalités de X_1
 treat_residuals = X_1 - X_2[,S_hat] %*% Gamma_hat
 
-M_matrix = sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`) %*% t(sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`))
-C_matrix = t(treat_residuals)%*%treat_residuals
-sigma = solve(C_matrix) %*% M_matrix %*% solve(C_matrix)
+M_matrix = sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`) %*% t(sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`)) /(n - length(S_hat)-1)
+C_matrix = t(treat_residuals)%*%treat_residuals / n
+sigma = sqrt(solve(C_matrix) %*% M_matrix %*% solve(C_matrix)) / sqrt(n) 
 
-# Bien regarder les histoires d'eliminer une dummy etc.
+#################
+#################
+### GRAPHIQUE ###
+#################
+#################
 
-# Finalement: plot
-plot_data = ts(cbind(tau_hat + qnorm(0.025)*diag(sigma), tau_hat, tau_hat + qnorm(0.975) *diag(sigma)))
-
-plot(plot_data, plot.type="single",
-     col=c("firebrick","firebrick","firebrick"),
-     lwd=c(1,2,1),
-     lty=c(6,1,6))
-
-dip = cbind(c("10","12","22","21","30","31","32","33","41","42","43","44","50","60","70","71"),
-            c("Master (recherche ou professionnel), DEA, DESS, Doctorat",
+dip = data.frame("ID" = c("10","12","22","21","30","31","32","33","41","42","43","44","50","60","70"),
+            "Diplome" = c("Master (recherche ou professionnel), DEA, DESS, Doctorat",
               "Ecoles niveau licence et au-delà",
               "Maîtrise (M1)",
               "Licence (L3)",
@@ -128,8 +177,17 @@ dip = cbind(c("10","12","22","21","30","31","32","33","41","42","43","44","50","
               "Brevet de technicien, brevet professionnel",
               "CAP, BEP",
               "Brevet des collèges",
-              "Certificat d'études primaires",
-              "Sans diplôme"))
-colnames(dip) = c("ID","Description")
+              "Certificat d'études primaires"),
+            "lower_bound" = tau_hat + qnorm(0.025)*diag(sigma),
+            "Coefficient" = tau_hat,
+            "upper_bound" = tau_hat + qnorm(0.975) *diag(sigma))
 
-## reste à calculer ecart-type etc
+qplot(x    = Diplome,
+      y    = Coefficient,
+      data = dip) +
+  geom_errorbar(aes(
+    ymin  = lower_bound,
+    ymax  = upper_bound,
+    width = 0.15)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(limits=rev(dip$Diplome))
