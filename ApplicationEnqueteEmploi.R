@@ -8,14 +8,15 @@ rm(list=ls())
 library('aws.s3')
 library('haven')
 library('glmnet')
-library('grplasso') # pour group-lasso
 library("ggplot2")
 library('fastDummies') # pour créer des dummies à partir de catégories
+# library('grplasso') # pour group-lasso, mais solution hyper longue
 
 setwd("/home/zctxti")
 
-### Algorithme de calcul du group lasso, plus rapide que le package ici
-source('grandedim/functions/group_lasso.R')
+### Fonctions faites maison
+source('grandedim/functions/group_lasso.R') # Algorithme de calcul du group lasso, plus rapide que le package ici
+source('grandedim/functions/K_matrix_cluster.R') # Cluster
 
 
 #######################
@@ -165,6 +166,9 @@ X_1 = X_1[,1:(ncol(X_1)-1)] # On enlève la modalité "sans diplôme" pour évit
 one_hot_category = dummy_cols(data_use[,names_categorical], remove_most_frequent_dummy=TRUE, remove_selected_columns=TRUE)
 X_2 = as.matrix(cbind(data_use[, names_continuous], one_hot_category))
 
+ID_menage = data_use[,"IDENT"] # Identifiant du ménage, pour cluster dans les écart-types.
+ID_indiv = paste(data_use[,"IDENT"],data_use[,"NOI"],sep="_") # Identifiant individu.
+
 remove(data, data_use, one_hot_category)
 
 ### Simple reg 
@@ -244,9 +248,10 @@ tau_hat = dbs_reg$coefficients[coef_names]
 Gamma_hat = solve(t(X_2[,S_hat])%*%X_2[,S_hat] + 0.001*diag(length(S_hat))) %*% (t(X_2[,S_hat]) %*% X_1) # Regression post-lasso de chaque modalités de X_1
 treat_residuals = X_1 - X_2[,S_hat] %*% Gamma_hat
 
-M_matrix = sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`) %*% t(sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`)) /(n - ncol(X_1) - length(S_hat) - 1)
-C_matrix = t(treat_residuals)%*%treat_residuals / n
-sigma = sqrt(solve(C_matrix) %*% M_matrix %*% solve(C_matrix)) / sqrt(n) 
+M_matrix = t(sweep(treat_residuals,MARGIN=1,dbs_reg$residuals,`*`)) %*% sweep(treat_residuals,MARGIN=1,dbs_reg$residuals,`*`) /(n - ncol(X_1) - length(S_hat) - 1) # pas de cluster
+K_matrix = K_matrix_cluster(eps=sweep(treat_residuals,MARGIN=1,dbs_reg$residuals,`*`), cluster_var=ID_menage, df_adj=ncol(X_1) + length(S_hat) + 1) # cluster au niveau du ménage
+J_matrix = t(treat_residuals)%*%treat_residuals / n
+sigma = sqrt(solve(J_matrix) %*% K_matrix %*% solve(J_matrix)) / sqrt(n) 
 
 #################
 #################
