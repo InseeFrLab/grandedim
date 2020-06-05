@@ -5,14 +5,17 @@
 rm(list=ls())
 
 ### CHARGEMENT DES PACKAGES
+library('aws.s3')
 library('haven')
 library('glmnet')
 library('grplasso') # pour group-lasso
 library("ggplot2")
 library('fastDummies') # pour créer des dummies à partir de catégories
 
+setwd("/home/zctxti")
+
 ### Algorithme de calcul du group lasso, plus rapide que le package ici
-source('functions/group_lasso.R')
+source('grandedim/functions/group_lasso.R')
 
 
 #######################
@@ -20,10 +23,69 @@ source('functions/group_lasso.R')
 ### DATA MANAGEMENT ###
 #######################
 #######################
+#data = read_sas("/Users/jeremylhour/Documents/data/indiv171.sas7bdat")
 
-#data = read_sas("indiv171.sas7bdat")
-data = read_sas("/Users/jeremylhour/Documents/data/indiv171.sas7bdat")
-data = as.data.frame(data)
+bucket = "groupe-1006"
+files = get_bucket(bucket = bucket, prefix = "grandedim/")
+
+for(file in files[2:13]){
+  path = file$Key
+  save_object(bucket = bucket,  prefix = "grandedim/", object=path,file=path)
+}
+
+### 2017
+data_171 = read_sas("grandedim/indiv171.sas7bdat")
+data_171 = as.data.frame(data_171)
+
+data_172 = read_sas("grandedim/indiv172.sas7bdat")
+data_172 = as.data.frame(data_172)
+
+data_173 = read_sas("grandedim/indiv173.sas7bdat")
+data_173 = as.data.frame(data_173)
+
+data_174 = read_sas("grandedim/indiv174.sas7bdat")
+data_174 = as.data.frame(data_174)
+
+data_17 = rbind(data_171,data_172,data_173,data_174)
+remove(data_171,data_172,data_173,data_174)
+
+
+### 2018
+data_181 = read_sas("grandedim/indiv181.sas7bdat")
+data_181 = as.data.frame(data_181)
+
+data_182 = read_sas("grandedim/indiv182.sas7bdat")
+data_182 = as.data.frame(data_182)
+
+data_183 = read_sas("grandedim/indiv183.sas7bdat")
+data_183 = as.data.frame(data_183)
+
+data_184 = read_sas("grandedim/indiv184.sas7bdat")
+data_184 = as.data.frame(data_184)
+
+data_18 = rbind(data_181,data_182,data_183,data_184)
+remove(data_181,data_182,data_183,data_184)
+
+### 2019
+data_191 = read_sas("grandedim/indiv191.sas7bdat")
+data_191 = as.data.frame(data_191)
+
+data_192 = read_sas("grandedim/indiv192.sas7bdat")
+data_192 = as.data.frame(data_192)
+
+data_193 = read_sas("grandedim/indiv193.sas7bdat")
+data_193 = as.data.frame(data_193)
+
+data_194 = read_sas("grandedim/indiv194.sas7bdat")
+data_194 = as.data.frame(data_194)
+
+data_19 = rbind(data_191,data_192,data_193,data_194)
+remove(data_191,data_192,data_193,data_194)
+
+### Certaines variables ne sont pas dans toutes les tables:
+common_var = intersect(intersect(names(data_17), names(data_18)),names(data_19))
+data = rbind(data_17[,common_var],data_18[,common_var],data_19[,common_var])
+remove(data_17,data_18,data_19)
 
 # Outcome "Y", log du salaire mensuel net
 data[,"SALRED"] = as.numeric(data[,"SALRED"]) # salaire mensuel net
@@ -93,24 +155,17 @@ X_1_names = "DIP"
 X_2_names = c(names_continuous,names_categorical)
 
 data_use = data[complete.cases(data[,c(outcome,X_1_names,X_2_names)]),]
+#save(data_use,file="data_use.Rda")
+#put_object(file="data_use.Rda", object="grandedim/data_use.Rda", bucket=bucket)
 
 Y = data_use[,outcome]
 X_1 = model.matrix(~. - 1, data = data.frame("EDUC"=as.factor(data_use[,X_1_names])), contrasts.arg = "EDUC")
-#X_1 = makeX(data.frame("EDUC"=as.factor(data_use[,X_1_names])))
 X_1 = X_1[,1:(ncol(X_1)-1)] # On enlève la modalité "sans diplôme" pour éviter les problèmes de colinéarité.
-
-
-# se poser la question de la gestion des NA pour les autres variables (X_2)
-#pre_X_2 = data_use[,X_2_names]
-#pre_X_2[pre_X_2 == ""] = NA
-#md.pattern(pre_X_2)
 
 one_hot_category = dummy_cols(data_use[,names_categorical], remove_most_frequent_dummy=TRUE, remove_selected_columns=TRUE)
 X_2 = as.matrix(cbind(data_use[, names_continuous], one_hot_category))
 
-remove(data)
-remove(data_use)
-remove(one_hot_category)
+remove(data, data_use, one_hot_category)
 
 ### Simple reg 
 coef_names = paste("X_1",colnames(X_1),sep="")
@@ -138,9 +193,9 @@ lambda = 1.1*qnorm(1-.5*gamma_pen/p)/sqrt(n) # niveau (theorique) de penalisatio
 outcome_selec = glmnet(X_2,Y, family="gaussian",alpha=1,lambda=lambda)
 predict(outcome_selec,type="coef")
 
-set_Y = predict(outcome_selec,type="nonzero") # ensemble des coefficients non nuls à cette étape
+set_Y = unlist(predict(outcome_selec,type="nonzero")) # ensemble des coefficients non nuls à cette étape
 
-naive_reg = lm(Y ~ X_1 + X_2[,unlist(set_Y)]) # Naive regression
+naive_reg = lm(Y ~ X_1 + X_2[,set_Y]) # Naive regression
 tau_naive = naive_reg$coefficients[coef_names]
 
 ##################################################################
@@ -181,12 +236,12 @@ set_X1 = c(which(apply(Gamma_hat>0,1,sum)>0))
 #############################
 #############################
 
-S_hat = sort(unique(unlist(union(set_Y,set_X1))))
+S_hat = sort(union(set_X1,set_Y))
 dbs_reg = lm(Y ~ X_1 + X_2[,S_hat])
 tau_hat = dbs_reg$coefficients[coef_names]
 
 ### Calcul de l'écart-type
-Gamma_hat = solve(t(X_2[,S_hat])%*%X_2[,S_hat]) %*% (t(X_2[,S_hat]) %*% X_1) # Regression post-lasso de chaque modalités de X_1
+Gamma_hat = solve(t(X_2[,S_hat])%*%X_2[,S_hat] + 0.001*diag(length(S_hat))) %*% (t(X_2[,S_hat]) %*% X_1) # Regression post-lasso de chaque modalités de X_1
 treat_residuals = X_1 - X_2[,S_hat] %*% Gamma_hat
 
 M_matrix = sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`) %*% t(sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`)) /(n - ncol(X_1) - length(S_hat) - 1)
