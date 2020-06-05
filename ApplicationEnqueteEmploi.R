@@ -293,6 +293,12 @@ ggplot(data=dip, aes(x = Diplome, y = Full, group=ID)) +
   scale_x_discrete(limits=rev(dip$Diplome)) +
   geom_point(aes(x = Diplome, y = Coefficient, group=ID), color="red",fill="red",shape=16, position = dodge) +
   geom_errorbar(aes(ymin  = lower_bound, ymax  = upper_bound, group=ID, width = 0.2), color = "red", position = dodge) +
-  geom_abline(slope=0,intercept=0)
+  geom_abline(slope=0,intercept=0) +
+  labs(x = "Niveau de diplôme", y = "Impact mesuré")
 
+# Avec l'estimateur de double sélection, on repère facilement quatre groupes:
+# 1) Sans diplôme / jusqu'au brevet des collèges,
+# 2) Bac,
+# 3) De Bac +2 à maitrise,
+# 4) Master 2, écoles et au delà.
 
