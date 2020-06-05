@@ -248,7 +248,7 @@ tau_hat = dbs_reg$coefficients[coef_names]
 Gamma_hat = solve(t(X_2[,S_hat])%*%X_2[,S_hat] + 0.001*diag(length(S_hat))) %*% (t(X_2[,S_hat]) %*% X_1) # Regression post-lasso de chaque modalités de X_1
 treat_residuals = X_1 - X_2[,S_hat] %*% Gamma_hat
 
-M_matrix = t(sweep(treat_residuals,MARGIN=1,dbs_reg$residuals,`*`)) %*% sweep(treat_residuals,MARGIN=1,dbs_reg$residuals,`*`) /(n - ncol(X_1) - length(S_hat) - 1) # pas de cluster
+# M_matrix = t(sweep(treat_residuals,MARGIN=1,dbs_reg$residuals,`*`)) %*% sweep(treat_residuals,MARGIN=1,dbs_reg$residuals,`*`) /(n - ncol(X_1) - length(S_hat) - 1) # pas de cluster
 K_matrix = K_matrix_cluster(eps=sweep(treat_residuals,MARGIN=1,dbs_reg$residuals,`*`), cluster_var=ID_menage, df_adj=ncol(X_1) + length(S_hat) + 1) # cluster au niveau du ménage
 J_matrix = t(treat_residuals)%*%treat_residuals / n
 sigma = sqrt(solve(J_matrix) %*% K_matrix %*% solve(J_matrix)) / sqrt(n) 
