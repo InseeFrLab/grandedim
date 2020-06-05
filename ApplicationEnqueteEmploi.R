@@ -2,18 +2,17 @@
 ### Jérémy L'Hour
 ### 29/05/2020
 
-### Attention: le group lasso nécessite énormément de mémoire, surtout pour constituer la matrice de design
-### Ensuite, cela prend un certain temps pour obtenir les resultats
-
-
 rm(list=ls())
 
 ### CHARGEMENT DES PACKAGES
 library('haven')
 library('glmnet')
-library('grplasso')
+library('grplasso') # pour group-lasso
 library("ggplot2")
 library('fastDummies') # pour créer des dummies à partir de catégories
+
+### Algorithme de calcul du group lasso, plus rapide que le package ici
+source('functions/group_lasso.R')
 
 
 #######################
@@ -22,7 +21,8 @@ library('fastDummies') # pour créer des dummies à partir de catégories
 #######################
 #######################
 
-data = read_sas("indiv171.sas7bdat")
+#data = read_sas("indiv171.sas7bdat")
+data = read_sas("/Users/jeremylhour/Documents/data/indiv171.sas7bdat")
 data = as.data.frame(data)
 
 # Outcome "Y", log du salaire mensuel net
@@ -95,8 +95,10 @@ X_2_names = c(names_continuous,names_categorical)
 data_use = data[complete.cases(data[,c(outcome,X_1_names,X_2_names)]),]
 
 Y = data_use[,outcome]
-X_1 = makeX(data.frame("EDUC"=data_use[,X_1_names]))
+X_1 = model.matrix(~. - 1, data = data.frame("EDUC"=as.factor(data_use[,X_1_names])), contrasts.arg = "EDUC")
+#X_1 = makeX(data.frame("EDUC"=as.factor(data_use[,X_1_names])))
 X_1 = X_1[,1:(ncol(X_1)-1)] # On enlève la modalité "sans diplôme" pour éviter les problèmes de colinéarité.
+
 
 # se poser la question de la gestion des NA pour les autres variables (X_2)
 #pre_X_2 = data_use[,X_2_names]
@@ -110,8 +112,17 @@ remove(data)
 remove(data_use)
 remove(one_hot_category)
 
-reg_simple = lm(Y ~ X_1)
+### Simple reg 
+coef_names = paste("X_1",colnames(X_1),sep="")
 
+reg_simple = lm(Y ~ X_1)
+tau_simple = reg_simple$coefficients[coef_names]
+
+### Full reg
+reg_full= lm(Y ~ X_1 + X_2)
+tau_full = reg_full$coefficients[coef_names]
+sigma_full = summary(reg_full)$coefficients[coef_names, 2]
+  
 ############################################
 ############################################
 ### ETAPE 1: Selection par rapport à "Y" ###
@@ -129,6 +140,9 @@ predict(outcome_selec,type="coef")
 
 set_Y = predict(outcome_selec,type="nonzero") # ensemble des coefficients non nuls à cette étape
 
+naive_reg = lm(Y ~ X_1 + X_2[,unlist(set_Y)]) # Naive regression
+tau_naive = naive_reg$coefficients[coef_names]
+
 ##################################################################
 ##################################################################
 ### ETAPE 2: Selection par rapport à "X_1" avec le group Lasso ###
@@ -136,18 +150,28 @@ set_Y = predict(outcome_selec,type="nonzero") # ensemble des coefficients non nu
 ##################################################################
 
 # Cette seconde étape est plus compliquée: la variable X_1 possèdre plusieurs modalités,
-# Il faut donc binariser (les convertir en one-hot) et faire autant de régressions qu'il y a de modalités-1
+# Il faut donc binariser (les convertir en one-hot) et faire autant de régressions qu'il y a de modalités
 # On propose une approche Group-Lasso dans la mesure où l'on suppose que le schéma de sparsité est le même pour toutes ces régressions.
-# Cela nécessite de faire des régression empiler et de vectoriser la variable dépendante.
+# Cela nécessite de faire des régression empiler et de vectoriser la variable dépendante si on utilise le package grplasso, ce qui est très long.
+# Depuis group-lasso implémenté manuellement.
 # Pour le Group Lasso il y a donc p groupes de variables
 
-X_1_vec = matrix(c(X_1), ncol=1)
-X_2_vec =  kronecker(diag(ncol(X_1)), X_2)
-group_index = rep(1:p,ncol(X_1))
+# ajustement de la pénalisation
+gamma_pen = .1/log(ncol(X_1)*max(p,n))
+lambda = 1.1*qnorm(1-.5*gamma_pen/(ncol(X_1)*p))/sqrt(ncol(X_1)*n) # niveau (theorique) de penalisation Lasso
 
-immunization_selec = grplasso(X_2_vec, X_1_vec, group_index, lambda=n*lambda, model=LinReg()) # ici la fonction objectif est differente, il faut multiplier la penalité par n
-Gamma_hat = matrix(immunization_selec$coefficients, ncol=ncol(X_1))
-row.names(Gamma_hat) = colnames(X_2)
+### VERSION A: avec le package grplasso -- ATTENTION TRES GOURMAND!
+# X_1_vec = matrix(c(X_1), ncol=1)
+# X_2_vec =  kronecker(diag(ncol(X_1)), X_2) # ATTENTION: Prend 8.5 Go de place...
+# group_index = rep(1:p,ncol(X_1))
+# 
+# immunization_selec = grplasso(X_2_vec, X_1_vec, group_index, lambda=n*lambda, model=LinReg()) # ici la fonction objectif est differente, il faut multiplier la penalité par n
+# Gamma_hat = matrix(immunization_selec$coefficients, ncol=ncol(X_1))
+# row.names(Gamma_hat) = colnames(X_2)
+
+### VERSION B: avec implémentation manuelle -- bien plus rapide
+immunization_selec_man = group_lasso(X_2,X_1,lambda=lambda,trace=TRUE)
+Gamma_hat = immunization_selec_man$beta[-p-1,]
 
 set_X1 = c(which(apply(Gamma_hat>0,1,sum)>0))
 
@@ -158,18 +182,14 @@ set_X1 = c(which(apply(Gamma_hat>0,1,sum)>0))
 #############################
 
 S_hat = sort(unique(unlist(union(set_Y,set_X1))))
-
 dbs_reg = lm(Y ~ X_1 + X_2[,S_hat])
-
-coef_names = paste("X_1",colnames(X_1),sep="")
 tau_hat = dbs_reg$coefficients[coef_names]
-tau_simple = reg_simple$coefficients[coef_names]
 
 ### Calcul de l'écart-type
 Gamma_hat = solve(t(X_2[,S_hat])%*%X_2[,S_hat]) %*% (t(X_2[,S_hat]) %*% X_1) # Regression post-lasso de chaque modalités de X_1
 treat_residuals = X_1 - X_2[,S_hat] %*% Gamma_hat
 
-M_matrix = sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`) %*% t(sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`)) /(n - length(S_hat)-1)
+M_matrix = sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`) %*% t(sweep(t(treat_residuals),MARGIN=2,dbs_reg$residuals,`*`)) /(n - ncol(X_1) - length(S_hat) - 1)
 C_matrix = t(treat_residuals)%*%treat_residuals / n
 sigma = sqrt(solve(C_matrix) %*% M_matrix %*% solve(C_matrix)) / sqrt(n) 
 
@@ -198,15 +218,21 @@ dip = data.frame("ID" = c("10","12","22","21","30","31","32","33","41","42","43"
             "lower_bound" = tau_hat + qnorm(0.025)*diag(sigma),
             "Coefficient" = tau_hat,
             "upper_bound" = tau_hat + qnorm(0.975) *diag(sigma),
-            "Moyenne" = tau_simple)
+            "Moyenne" = tau_simple,
+            "Naive" = tau_naive,
+            "Full" = tau_full,
+            "Full_lb" = tau_full + qnorm(0.025)*sigma_full,
+            "Full_ub" = tau_full + qnorm(0.975) *sigma_full)
 
-qplot(x    = Diplome,
-      y    = Coefficient,
-      data = dip) +
-  geom_errorbar(aes(
-    ymin  = lower_bound,
-    ymax  = upper_bound,
-    width = 0.15)) +
+dodge = position_dodge(.7)
+
+ggplot(data=dip, aes(x = Diplome, y = Full, group=ID)) +
+  geom_point(color="blue",fill="blue",shape=16) +
+  geom_errorbar(aes(ymin  = Full_lb, ymax  = Full_ub, width = 0.2), color="blue") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_x_discrete(limits=rev(dip$Diplome)) +
-  geom_point(aes(Diplome,Moyenne), color="red",fill="red",shape=25)
+  geom_point(aes(x = Diplome, y = Coefficient, group=ID), color="red",fill="red",shape=16, position = dodge) +
+  geom_errorbar(aes(ymin  = lower_bound, ymax  = upper_bound, group=ID, width = 0.2), color = "red", position = dodge) +
+  geom_abline(slope=0,intercept=0)
+
+

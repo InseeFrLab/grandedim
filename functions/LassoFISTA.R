@@ -25,7 +25,7 @@
 
 LassoFISTA <- function(y,X,nopen=NULL,lambda,
                        tol=1e-8,maxIter=1000,trace=F){
-  
+
   ### set algo values
   eta = 1/max(2*eigen(t(X)%*%X)$values/nrow(X))
   theta = 1
