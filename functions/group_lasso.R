@@ -34,6 +34,7 @@ group_lasso <- function(X,y,lambda,nopen=NULL,tol=1e-8,maxIter=1000,trace=F){
   v = beta
   cv = 1
   
+  print("Computing Group-Lasso solution...")
   t_start = Sys.time()
   k = 0
   repeat{
