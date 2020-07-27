@@ -163,6 +163,11 @@ X_2_names = c(names_continuous,names_categorical)
 data_use = data[complete.cases(data[,c(outcome,X_1_names,X_2_names)]),]
 #save(data_use,file="data_use.Rda")
 #put_object(file="data_use.Rda", object="grandedim/data_use.Rda", bucket=bucket)
+#bucket = "groupe-1006"
+#files = get_bucket(bucket = bucket, prefix = "grandedim/")
+#path = files[3]$Contents$Key
+#save_object(bucket = bucket,  prefix = "grandedim/", object=path,file=path)
+#load("grandedim/data_use.Rda")
 load("/Users/jeremylhour/Documents/data/data_use.Rda")
 
 # "Y" (outcome)
@@ -180,9 +185,12 @@ colinear = caret::findLinearCombos(cbind(X_1,X_2,rep(1,nrow(X_2))))
 suppr = colinear$remove-ncol(X_1) # recalage par rapport à l'indice de X_2
 X_2 = X_2[,-suppr] # On enlève les colonnes qui créent de la multicolinéairité, avec l'inclusion de X_1 et une constante
 
-# Identifiants clustering
+# Identifiants clustering menage / individus
 ID_menage = data_use[,"IDENT"] # Identifiant du ménage, pour cluster dans les écart-types.
 ID_indiv = paste(data_use[,"IDENT"],data_use[,"NOI"],sep="_") # Identifiant individu.
+
+# Identifiant departement -- pour tester
+ID_dep = data_use[,"DEP"]
 
 coef_names = paste("X_1",colnames(X_1),sep="")
 n = nrow(X_2); p = ncol(X_2)
@@ -205,15 +213,21 @@ reg_full = lm(Y ~ X_1 + X_2)
 tau_full = reg_full$coefficients[coef_names]
 sigma_full = summary(reg_full)$coefficients[coef_names, 2]
 
-### Calcul des écart-types clusterisés
+### Calcul des écart-types clusterisés -- niveau menage
 X_2_tilde = cbind(X_2,rep(1,nrow(X_2))) # On ajoute la constante pour faire la régression partielle
 FS_residuals = X_1 - X_2_tilde%*%solve(t(X_2_tilde)%*%X_2_tilde)%*%(t(X_2_tilde) %*% X_1)
 
 K_matrix_full = K_matrix_cluster(eps=sweep(FS_residuals,MARGIN=1,reg_full$residuals,`*`), cluster_var=ID_menage, df_adj=ncol(X_2)+ncol(X_1)+1) # cluster au niveau du ménage
 J_matrix_full = t(FS_residuals)%*%FS_residuals / n
-sigma_full_cluster = sqrt(solve(J_matrix_full) %*% K_matrix_full %*% solve(J_matrix_full)) / sqrt(n) 
-sigma_full_cluster = diag(sigma_full_cluster)
+sigma_full_cluster = solve(J_matrix_full) %*% K_matrix_full %*% solve(J_matrix_full) / n
+sigma_full_cluster = sqrt(diag(sigma_full_cluster))
 
+### Calcul des écart-types clusterisés -- niveau departement
+K_matrix_full_dep = K_matrix_cluster(eps=sweep(FS_residuals,MARGIN=1,reg_full$residuals,`*`), cluster_var=ID_dep, df_adj=0) # cluster au niveau du ménage
+sigma_full_cluster_dep = solve(J_matrix_full) %*% K_matrix_full_dep %*% solve(J_matrix_full) / n
+sigma_full_cluster_dep = sqrt(diag(sigma_full_cluster_dep))
+
+### NB: cela ne change pas grand chose par rapport au niveau ménage -- réduction des écart-types de l'ordre de 5%.
 
 ############################################
 ############################################

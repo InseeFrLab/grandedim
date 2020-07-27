@@ -10,7 +10,6 @@
   
 K_matrix_cluster <- function(eps, cluster_var, df_adj=0){
   ID_list = unique(cluster_var) # unique cluster identifiers
-  K_matrix = matrix(0, nrow = ncol(eps), ncol = ncol(eps))
   
   print("Computing clustered standard errors...")
   t_start = Sys.time()
