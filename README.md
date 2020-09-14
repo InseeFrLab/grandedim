@@ -14,13 +14,13 @@ Document "L'économétrie en grande dimension" servant de support de cours, disp
 ### Jour 1 -- après-midi:
 - **Application**: [utilisation de glmnet](RidgeLasso-glmnet.ipynb)
 - Inférence post-sélection, Leeb and Potscher [Section 3.1]
-- **Application**: [simulations](RegularizationBias.ipynb), ajouter un exercice? [Section 3.2]
+- **Application**: [simulations](RegularizationBias.ipynb) [Section 3.2]
     
 ### Jour 2 -- matin:
 - Immunisation et double-sélection [Sections 3.3-3.5]
 - **Application**: [simulations](DoubleSelection.ipynb)
-- **Application empirique**: [l'effet du diplôme sur le salaire dans l'enquête emploi](Chargement_Data.R)
+- **Application empirique**: [l'effet du diplôme sur le salaire dans l'enquête emploi](Exercice_EnqueteEmploi.ipynb), avec des [éléments de correction](ApplicationEnqueteEmploi.ipynb)
     
 ### Jour 2 -- après-midi:
 - Hétérogénéité des effets [Section 4]
-- **Application empirique**: [effet du vote sur la propension à économiser l'eau](GenericML-example.R).
+- **Application empirique**: [effet du vote sur la propension à économiser l'eau](GenericML-example.R) ou retour sur l'applciation Enquête Emploi selon le temps.
