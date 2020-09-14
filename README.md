@@ -15,7 +15,6 @@ Document "L'économétrie en grande dimension" servant de support de cours, disp
 - **Application**: [Utilisation de glmnet](RidgeLasso-glmnet.ipynb)
 - Inférence post-sélection, Leeb and Potscher [Section 3.1]
 - **Application**: Simulations, faire un exercice [Section 3.2]
-    \end{itemize}
     
 ### Jour 2 -- matin:
 - Immunisation et double-sélection [Sections 3.3-3.5]
@@ -24,4 +23,3 @@ Document "L'économétrie en grande dimension" servant de support de cours, disp
 ### Jour 2 -- après-midi:
 - Hétérogénéité des effets [Section 4]
 - **Application**: Effet du vote sur la propension à économiser l'eau.
-\end{enumerate}
