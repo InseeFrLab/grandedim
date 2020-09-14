@@ -23,4 +23,4 @@ Document "L'économétrie en grande dimension" servant de support de cours, disp
     
 ### Jour 2 -- après-midi:
 - Hétérogénéité des effets [Section 4]
-- **Application empirique**: [effet du vote sur la propension à économiser l'eau](GenericML-example.R) ou retour sur l'applciation Enquête Emploi selon le temps.
+- **Application empirique**: [effet du vote sur la propension à économiser l'eau](GenericML-example.R) ou retour sur l'application Enquête Emploi selon le temps restant.
