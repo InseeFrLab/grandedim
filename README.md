@@ -2,7 +2,7 @@
 
 Codes pour la formation "économétrie en grande dimension" (Insee, 2020), prévue les 29 et 30 septembre 2020.
 
-Voir document latex correspondant.
+Document "L'économétrie en grande dimension" servant de support de cours, disponible à cette adresse: https://sites.google.com/site/jeremylhour/research 
 
 ## Plan de la formation:
 
@@ -12,7 +12,7 @@ Voir document latex correspondant.
 
     
 ### Jour 1 -- après-midi:
-- **Application**: Utilisation de glmnet
+- **Application**: [Utilisation de glmnet](RidgeLasso-glmnet.ipynb)
 - Inférence post-sélection, Leeb and Potscher [Section 3.1]
 - **Application**: Simulations, faire un exercice [Section 3.2]
     \end{itemize}
