@@ -28,4 +28,4 @@ Document "L'économétrie en grande dimension" servant de support de cours, disp
 
 ## Autres morceaux de code utiles:
 - [Code pour calculer le Lasso avec l'algorithme FISTA](functions/LassoFISTA.R)
-- [Code pour calculer le Group Lasso avec l'algorithme FISTA](functions/group-lasso.R)
+- [Code pour calculer le Group Lasso avec l'algorithme FISTA](functions/group_lasso.R)
