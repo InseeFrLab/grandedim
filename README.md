@@ -29,3 +29,17 @@ Document "L'économétrie en grande dimension" servant de support de cours, disp
 ## Autres morceaux de code utiles:
 - [Code pour calculer le Lasso avec l'algorithme FISTA](functions/LassoFISTA.R)
 - [Code pour calculer le Group Lasso avec l'algorithme FISTA](functions/group_lasso.R)
+
+## Licence
+
+L'ensemble des documents et fichiers disponibles dans ce dépôt sont mis à
+disposition sous la Licence Ouverte/Open Licence version 2.0 d'Etalab (voir la
+[licence](./LICENCE)).
+
+Cela signifie que vous êtes libres de réutiliser ces informations, gratuitement
+et sans restriction d'usage, à la seule condition de citer l'information comme
+suit :
+
+```
+Jérémy L'Hour, Insee - https://github.com/InseeFrLab/grandedim, 2020
+```
