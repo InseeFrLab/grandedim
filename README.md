@@ -1,6 +1,6 @@
 # EconometrieGrandeDim
 
-Codes correspondant au document de travail "L'économétrie en grande dimension", disponible à cette adresse: https://sites.google.com/site/jeremylhour/research .
+Codes correspondant au document de travail "L'économétrie en grande dimension", disponible à cette adresse: https://www.insee.fr/fr/statistiques/4923129.
 
 Developpés initialement pour la formation "économétrie en grande dimension" (Insee, 2020), qui s'est tenue les 29 et 30 septembre 2020.
 
